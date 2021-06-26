@@ -1,5 +1,5 @@
 from multiprocessing.connection import Listener
-from multiprocessing import Process, RLock
+from multiprocessing import Process, RLock, Event
 from winreg import *
 import admin
 import os
@@ -20,6 +20,8 @@ class CustomListener:
         self.port = port
         self.agents_path = self.agents_path()
         self.brush = Brush()
+        self.binlist = None
+        self.listener = None
 
     def agents_path(self):
         dirpath = os.path.dirname(os.path.realpath(__file__))
@@ -38,22 +40,34 @@ class CustomListener:
             print "ERROR: Please run uacamola as ADMINISTRATOR"
             return
         registry = Registry()
-        self.add_debugger(registry, binlist)
+        self.binlist = binlist
+        self._add_debugger(registry)
         # Creating a thread that will create the listeners
-        create_listeners = Process(target=self._create_listeners, args=())
-        create_listeners.start()
+        #create_listeners = Process(target=self._create_listeners, args=())
+        #create_listeners.start()
+        self._create_listener()
         # Waiting for exiting
-        raw_input("\n--- Press ENTER for quit mitigate mode ---\n\n")
-        self.del_debugger(registry, binlist)
+        #raw_input("\n--- Press ENTER for quit mitigate mode ---\n\n")
+        #self.del_debugger(registry, binlist)
         return
+    
+    def stop_listener(self):
+        if self.listener is None:
+            return
+        self.listener.terminate()
+        registry = Registry()
+        self._del_debugger(registry)
 
-    def _create_listeners(self):
-        while True:
-            listener = Process(target=self._listen, args=())
-            listener.start()
-            listener.join()
+    def _create_listener(self):
+        #while True:
+        event = Event()
+        self.listener = Process(target=self._listen, args=(event,))
+        self.listener.start()
+        print "\nPress Ctrl + c to quit mitigation mode.\n"
+        event.wait()
+        #self.listener.join()
             
-    def _listen(self):
+    def _listen(self, event):
         """ Listen for information from a client and performs
         actions related to the windows registry """
         registry = Registry()
@@ -82,11 +96,12 @@ class CustomListener:
             print "[+] Closing the listener"
             conn.close()
             listener.close()
+            event.set()
 
-    def add_debugger(self, registry, binlist):
+    def _add_debugger(self, registry):
         """ Adds debugger registry key for 
         each of the processes in the list """
-        for binary in binlist:
+        for binary in self.binlist:
             path = self.DEBUG_KEY + binary
             k = registry.open_key(HKLM, path)
             if not(k):
@@ -95,10 +110,10 @@ class CustomListener:
             registry.create_value(k,
                                   "debugger",
                                   payload)
-    def del_debugger(self, registry, binlist):
+    def _del_debugger(self, registry):
         """ Deletes debugger registry key for 
         each of the processes in the list """
-        for binary in binlist:
+        for binary in self.binlist:
             path = self.DEBUG_KEY + binary
             k = registry.open_key(HKLM, path)
             if not(k):

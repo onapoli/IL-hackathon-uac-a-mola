@@ -69,3 +69,6 @@ class Module(object):
         if args:
             payload += " " + " ".join(args)
         os.system(payload)
+    
+    def stop_module(self):
+        print "stopped module."
