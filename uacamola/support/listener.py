@@ -72,31 +72,30 @@ class CustomListener:
         actions related to the windows registry """
         registry = Registry()
         listener = Listener(('localhost', self.port), authkey=self.password)
-        conn = listener.accept()
-        msg = conn.recv()
-        if type(msg) is list and len(msg) == 2:
-            # Deleting debugger key
-            debug_path = self.DEBUG_KEY + msg[0]
-            k = registry.open_key(HKLM, debug_path)
-            registry.del_value(k, "debugger")
-            # Deleting the bad path
-            k = registry.open_key(HKCU, msg[1])
-            if k:
-                self.brush.color("[!!] POSSIBLE UAC BYPASS IN YOUR SYSTEM\n", 'RED')
-                registry.delete_key(HKCU, msg[1])
-                ctypes.windll.user32.MessageBoxA(
-                    None, "UAC BYPASS DETECTADO Y MITIGADO. EJECUCION SEGURA DEL BINARIO", "PELIGRO!", 0)
-            os.system(msg[0])
-            # Setting the debugger key before breaking connection
-            k = registry.open_key(HKLM, debug_path)
-            payload = self.build_payload(msg[0][:-3] + "pyw")            
-            registry.create_value(k,
-                                  "debugger",
-                                  payload)
-            print "[+] Closing the listener"
-            conn.close()
-            listener.close()
-            event.set()
+        while True:
+            conn = listener.accept()
+            msg = conn.recv()
+            if type(msg) is list and len(msg) == 2:
+                # Deleting debugger key
+                debug_path = self.DEBUG_KEY + msg[0]
+                k = registry.open_key(HKLM, debug_path)
+                registry.del_value(k, "debugger")
+                # Deleting the bad path
+                k = registry.open_key(HKCU, msg[1])
+                if k:
+                    self.brush.color("[!!] POSSIBLE UAC BYPASS IN YOUR SYSTEM\n", 'RED')
+                    registry.delete_key(HKCU, msg[1])
+                    ctypes.windll.user32.MessageBoxA(
+                        None, "UAC BYPASS DETECTADO Y MITIGADO. EJECUCION SEGURA DEL BINARIO", "PELIGRO!", 0)
+                os.system(msg[0])
+                # Setting the debugger key before breaking connection
+                k = registry.open_key(HKLM, debug_path)
+                payload = self.build_payload(msg[0][:-3] + "pyw")            
+                registry.create_value(k,
+                                    "debugger",
+                                    payload)
+                print "Mitigated malicious execution of {}".format(msg[0])
+                conn.close()
 
     def _add_debugger(self, registry):
         """ Adds debugger registry key for 
