@@ -68,6 +68,9 @@ class Session(object):
 
         print "\n"
 
+    # Added call to stop_module() when an interrupt signal is received.
+    # This will give the possibility to perform additional work before stopping
+    # modules.
     def run(self):
         if not(self._module.check_arguments()):
             self.brush.color('[!] REQUIRED ARGUMENTS NOT SET...exiting\n', 'RED')

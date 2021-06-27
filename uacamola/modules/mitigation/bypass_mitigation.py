@@ -36,6 +36,8 @@ class CustomModule(Module):
             binaries = f.readlines()
         return [b.strip() for b in binaries]
     
+    # Definition of bypass_mitigation's stop_module.
+    # It calls the method stop_listener from the CustomListener class.
     def stop_module(self):
         self.listener.stop_listener()
         print "terminated listener and stopped module."

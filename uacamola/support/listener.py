@@ -15,6 +15,8 @@ class CustomListener:
 
     DEBUG_KEY = "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\"
 
+    # Created two new class properties, binlist and listener, to access their
+    # values when stop_module is called. 
     def __init__(self, password, port):
         self.password = password
         self.port = port
@@ -27,6 +29,9 @@ class CustomListener:
         dirpath = os.path.dirname(os.path.realpath(__file__))
         return str(dirpath) + "\\agents\\"
 
+    # create_listener will create the listener process and wait indefinately
+    # until the user sends an interruption signal that will generate the call
+    # to stop_module.
     def listen(self, binlist):
         """
         Listen for the execution of a list of
@@ -42,15 +47,11 @@ class CustomListener:
         registry = Registry()
         self.binlist = binlist
         self._add_debugger(registry)
-        # Creating a thread that will create the listeners
-        #create_listeners = Process(target=self._create_listeners, args=())
-        #create_listeners.start()
         self._create_listener()
-        # Waiting for exiting
-        #raw_input("\n--- Press ENTER for quit mitigate mode ---\n\n")
-        #self.del_debugger(registry, binlist)
         return
     
+    # If there is a listener process running, terminates the process
+    # and deletes the registry values that were added with _add_debugger.
     def stop_listener(self):
         if self.listener is None:
             return
@@ -58,6 +59,11 @@ class CustomListener:
         registry = Registry()
         self._del_debugger(registry)
 
+    # Creates the listener process, starts it, and waits for it using
+    # an Event object, which is non-blocking, allowing the program to
+    # receive the interruption signal that terminates the process.
+    # Waiting for the process with join, blocked program execution
+    # completely and signals where not received during that state.
     def _create_listener(self):
         #while True:
         event = Event()
@@ -65,8 +71,9 @@ class CustomListener:
         self.listener.start()
         print "\nPress Ctrl + c to quit mitigation mode.\n"
         event.wait()
-        #self.listener.join()
-            
+
+    # This is the listener process, it includes an infinite loop where
+    # client connections are started and closed each time a message is received.
     def _listen(self, event):
         """ Listen for information from a client and performs
         actions related to the windows registry """
@@ -109,6 +116,9 @@ class CustomListener:
             registry.create_value(k,
                                   "debugger",
                                   payload)
+    
+    # Now the binlist is obtained from the correspondent class property,
+    # not as an argument. 
     def _del_debugger(self, registry):
         """ Deletes debugger registry key for 
         each of the processes in the list """

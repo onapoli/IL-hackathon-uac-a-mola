@@ -70,5 +70,12 @@ class Module(object):
             payload += " " + " ".join(args)
         os.system(payload)
     
+    # This method was added for modules that need to perform additional work
+    # before termination.
+    # CustomModules that need this method must implement their own
+    # stop_module method at their respective source file. When a CustomModule
+    # instance is created, if the same method is defined at Module and
+    # CustomModule, the method at CustomModule will be the one inherited
+    # by that instance.
     def stop_module(self):
         print "stopped module."
