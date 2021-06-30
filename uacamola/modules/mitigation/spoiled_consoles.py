@@ -51,15 +51,15 @@ class CustomModule(Module):
                                     # were used by its mysterious parent.
                                     # I am not sure about this.
                                     #
-                                    try:
-                                        print proc.memory_maps()
+                                    '''try:
+                                        proc.memory_maps()
                                         continue
                                     except psutil.AccessDenied:
                                         pass
                                     except psutil.NoSuchProcess:
-                                        continue
+                                        continue'''
                                     proc.suspend()
-                                    self.q.put({'name': proc.name(), 'pid': proc.pid()})
+                                    self.q.put({'name': proc.name(), 'pid': proc.pid})
                                     self._verifier(proc)
 
             time.sleep(1.0)
@@ -67,11 +67,13 @@ class CustomModule(Module):
     def _verifier(self, sus_proc):
         while True:
             if not self.q.empty():
+                response = self.q.get()
                 if response == 'yes':
                     try:
                         sus_proc.resume()
                     except psutil.NoSuchProcess:
                         pass
+                    print "\nSuspicious program execution resumed.\n"
                     continue
                 sus_childs = sus_proc.children()
                 sus_childs.append(sus_proc)
@@ -80,6 +82,8 @@ class CustomModule(Module):
                         child.terminate()
                     except psutil.NoSuchProcess:
                         pass
+                print "\nSuspicious program stopped.\n"
+                break
             time.sleep(1.0)
 
 
@@ -92,7 +96,7 @@ class CustomModule(Module):
             if not self.q.empty():
                 suspect = self.q.get()
                 while True:
-                    verification_prompt = "Possible malicious spoiled console launched by: {}\n\nDo you trust it?\nEnter Yes or No: ".format(suspect['name'])
+                    verification_prompt = "\nPossible malicious console launched by: {}\n\nDo you trust it?\nEnter Yes or No: ".format(suspect['name'])
                     response = raw_input(verification_prompt)
                     response = response.lower()
                     if response != 'yes' and response != 'no':
