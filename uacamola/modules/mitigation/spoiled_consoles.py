@@ -26,13 +26,14 @@ class CustomModule(Module):
         self.verification_parent = None
         self.consoles = {'cmd.exe', 'powershell.exe'}
     
-    def _hunter(self, suspects):
+    def _hunter(self):
         while True:
             conns = psutil.net_connections(kind='tcp')
             for conn in conns:
                 proc = psutil.Process(conn.pid)
                 # External program
-                if not proc.exe().startswith("C:\\Windows"):
+                exe_path = proc.exe()
+                if not exe_path.startswith("C:\\Windows"):
                     if proc.children():
                         for child in proc.children():
                             # Launched a console
@@ -58,13 +59,13 @@ class CustomModule(Module):
                                     except psutil.NoSuchProcess:
                                         continue
                                     proc.suspend()
-                                    suspects.put({'name': proc.name(), 'pid': proc.pid()})
+                                    self.suspects.put({'name': proc.name(), 'pid': proc.pid()})
             time.sleep(1.0)
 
-    def _verifier(self, suspects, verification):
+    def _verifier(self, verification):
         while True:
-            if not suspects.empty():
-                suspect = suspects.get()
+            if not self.suspects.empty():
+                suspect = self.suspects.get()
                 verification.send(suspect)
                 response = verification.recv()
                 sus_proc = psutil.Process(suspect['pid'])
@@ -87,15 +88,12 @@ class CustomModule(Module):
     # This module must be always implemented, it is called by the run option
     def run_module(self):
         self.suspects = Queue()
-        self.hunter = Process(target=self._hunter, args=(self.suspects,))
+        self.hunter = Process(target=self._hunter, args=())
         self.hunter.start()
-        #verification = Event()
         self.verification_parent, verification_child = Pipe()
-        self.verifier = Process(target=self._verifier, args=(self.suspects, verification_child,))
+        self.verifier = Process(target=self._verifier, args=(verification_child,))
         self.verifier.start()
         while True:
-            #verification.wait()
-            #verification.clear()
             suspect = self.verification_parent.recv()
             while True:
                 verification_prompt = "Possible malicious spoiled console launched by: {}\n\nDo you trust it?\nEnter Yes or No: ".format(suspect['name'])
