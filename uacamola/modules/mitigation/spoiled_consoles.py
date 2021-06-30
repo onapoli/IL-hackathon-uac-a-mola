@@ -22,17 +22,18 @@ class CustomModule(Module):
         # after the user has set the values
         self.hunter = None
         self.verifier = None
-        self.suspects = None
+        self.q = None
         self.verification_parent = None
         self.consoles = {'cmd.exe', 'powershell.exe'}
     
-    def _hunter(self, suspects):
+    def _hunter(self):
         while True:
             conns = psutil.net_connections(kind='tcp')
             for conn in conns:
                 proc = psutil.Process(conn.pid)
                 # External program
-                if not proc.exe().startswith("C:\\Windows"):
+                exe_path = proc.exe()
+                if not exe_path.startswith("C:\\Windows"):
                     if proc.children():
                         for child in proc.children():
                             # Launched a console
@@ -58,16 +59,14 @@ class CustomModule(Module):
                                     except psutil.NoSuchProcess:
                                         continue
                                     proc.suspend()
-                                    suspects.put({'name': proc.name(), 'pid': proc.pid()})
+                                    self.q.put({'name': proc.name(), 'pid': proc.pid()})
+                                    self._verifier(proc)
+
             time.sleep(1.0)
 
-    def _verifier(self, suspects, verification):
+    def _verifier(self, sus_proc):
         while True:
-            if not suspects.empty():
-                suspect = suspects.get()
-                verification.send(suspect)
-                response = verification.recv()
-                sus_proc = psutil.Process(suspect['pid'])
+            if not self.q.empty():
                 if response == 'yes':
                     try:
                         sus_proc.resume()
@@ -86,33 +85,25 @@ class CustomModule(Module):
 
     # This module must be always implemented, it is called by the run option
     def run_module(self):
-        self.suspects = Queue()
-        self.hunter = Process(target=self._hunter, args=(self.suspects,))
+        self.q = Queue()
+        self.hunter = Process(target=self._hunter, args=())
         self.hunter.start()
-        #verification = Event()
-        self.verification_parent, verification_child = Pipe()
-        self.verifier = Process(target=self._verifier, args=(self.suspects, verification_child,))
-        self.verifier.start()
         while True:
-            #verification.wait()
-            #verification.clear()
-            suspect = self.verification_parent.recv()
-            while True:
-                verification_prompt = "Possible malicious spoiled console launched by: {}\n\nDo you trust it?\nEnter Yes or No: ".format(suspect['name'])
-                response = raw_input(verification_prompt)
-                response = response.lower()
-                if response != 'yes' and response != 'no':
-                    continue
-                break
-            self.verification_parent.send(response)
+            if not self.q.empty():
+                suspect = self.q.get()
+                while True:
+                    verification_prompt = "Possible malicious spoiled console launched by: {}\n\nDo you trust it?\nEnter Yes or No: ".format(suspect['name'])
+                    response = raw_input(verification_prompt)
+                    response = response.lower()
+                    if response != 'yes' and response != 'no':
+                        continue
+                    break
+                self.q.put(response)
+            time.sleep(1.0)
     
     def stop_module(self):
         if self.hunter:
             self.hunter.terminate()
-        if self.verifier:
-            self.verifier.terminate()
-        if self.verification_parent:
-            self.verification_parent.close()
-        if self.suspects:
-            self.suspects.close()
+        if self.q:
+            self.q.close()
         
