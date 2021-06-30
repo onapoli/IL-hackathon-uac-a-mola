@@ -78,6 +78,7 @@ class Session(object):
             self._module.run_module()
         except KeyboardInterrupt:
             self.brush.color('[!] Exiting the module...\n', 'RED')
+            self._module.stop_module()
         except Exception as error:
             self.brush.color('[!] Error running the module:\n', 'RED')
             self.brush.color("  => " + str(error), 'RED')
