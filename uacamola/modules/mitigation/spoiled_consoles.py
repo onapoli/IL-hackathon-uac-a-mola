@@ -1,7 +1,7 @@
 #--encoding: utf-8--
 
 from module import Module
-from multiprocessing import Process, Queue, Pipe, Event
+from multiprocessing import Process, Queue, Pipe
 import psutil
 import time
 
@@ -21,11 +21,18 @@ class CustomModule(Module):
         # Class atributes, initialization in the run_module method
         # after the user has set the values
         self.hunter = None
-        self.verifier = None
         self.q = None
-        self.verification_parent = None
         self.consoles = {'cmd.exe', 'powershell.exe'}
     
+    #
+    # Monitors TCP connections from external programs that have mysterious
+    # parent processes, and have launched a console which could have
+    # administrator privileges if the mysterious parent process had them.
+    #
+    # Those absent parent processes could be the Windows Task Scheduler,
+    # or other vulnerable Windows programs that are commonly abused to
+    # perform UAC bypassing attacks, like fodhelper.exe, sdclt.exe, etc.
+    #
     def _hunter(self):
         while True:
             conns = psutil.net_connections(kind='tcp')
@@ -64,6 +71,11 @@ class CustomModule(Module):
 
             time.sleep(1.0)
 
+    #
+    # Wait for user response.
+    # If program is trusted, resume program execution.
+    # If it is not, stop program and all its child processes.
+    #
     def _verifier(self, sus_proc):
         while True:
             if not self.q.empty():
@@ -87,7 +99,13 @@ class CustomModule(Module):
             time.sleep(1.0)
 
 
-    # This module must be always implemented, it is called by the run option
+    #
+    # Create queue for communication between main process and child process.
+    # Create and initiate child process.
+    # Listen for suspicious programs and ask user if they are trusted.
+    # Send response to child process.
+    # Listen for next suspect.
+    #
     def run_module(self):
         self.q = Queue()
         self.hunter = Process(target=self._hunter, args=())
@@ -105,6 +123,7 @@ class CustomModule(Module):
                 self.q.put(response)
             time.sleep(1.0)
     
+    # Terminate child process and close queue.
     def stop_module(self):
         if self.hunter:
             self.hunter.terminate()
