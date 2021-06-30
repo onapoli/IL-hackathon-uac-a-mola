@@ -23,7 +23,7 @@ class CustomModule(Module):
         self.hunter = None
         self.verifier = None
         self.suspects = None
-        self.verification_parent = None
+        self.verification = None
         self.consoles = {'cmd.exe', 'powershell.exe'}
     
     def _hunter(self):
@@ -62,26 +62,30 @@ class CustomModule(Module):
                                     self.suspects.put({'name': proc.name(), 'pid': proc.pid})
             time.sleep(1.0)
 
-    def _verifier(self, verification):
+    def _verifier(self):
         while True:
             if not self.suspects.empty():
                 suspect = self.suspects.get()
-                verification.send(suspect)
-                response = verification.recv()
-                sus_proc = psutil.Process(suspect['pid'])
-                if response == 'yes':
-                    try:
-                        sus_proc.resume()
-                    except psutil.NoSuchProcess:
-                        pass
-                    continue
-                sus_childs = sus_proc.children()
-                sus_childs.append(sus_proc)
-                for child in sus_childs:
-                    try:
-                        child.terminate()
-                    except psutil.NoSuchProcess:
-                        pass
+                self.verification.put(suspect)
+                while True:
+                    if not self.verification.empty():
+                        response = self.verification.get()
+                        sus_proc = psutil.Process(suspect['pid'])
+                        if response == 'yes':
+                            try:
+                                sus_proc.resume()
+                            except psutil.NoSuchProcess:
+                                pass
+                            continue
+                        sus_childs = sus_proc.children()
+                        sus_childs.append(sus_proc)
+                        for child in sus_childs:
+                            try:
+                                child.terminate()
+                            except psutil.NoSuchProcess:
+                                pass
+                            break
+                    time.sleep(1.0)
             time.sleep(1.0)
 
 
@@ -90,27 +94,29 @@ class CustomModule(Module):
         self.suspects = Queue()
         self.hunter = Process(target=self._hunter, args=())
         self.hunter.start()
-        self.verification_parent, verification_child = Pipe()
-        self.verifier = Process(target=self._verifier, args=(verification_child,))
+        self.verification = Queue()
+        self.verifier = Process(target=self._verifier, args=())
         self.verifier.start()
         while True:
-            suspect = self.verification_parent.recv()
-            while True:
-                verification_prompt = "Possible malicious spoiled console launched by: {}\n\nDo you trust it?\nEnter Yes or No: ".format(suspect['name'])
-                response = raw_input(verification_prompt)
-                response = response.lower()
-                if response != 'yes' and response != 'no':
-                    continue
-                break
-            self.verification_parent.send(response)
+            if not self.verification.empty():
+                suspect = self.verification.get()
+                while True:
+                    verification_prompt = "Possible malicious spoiled console launched by: {}\n\nDo you trust it?\nEnter Yes or No: ".format(suspect['name'])
+                    response = raw_input(verification_prompt)
+                    response = response.lower()
+                    if response != 'yes' and response != 'no':
+                        continue
+                    break
+                self.verification.put(response)
+            time.sleep(1.0)
     
     def stop_module(self):
         if self.hunter:
             self.hunter.terminate()
         if self.verifier:
             self.verifier.terminate()
-        if self.verification_parent:
-            self.verification_parent.close()
+        if self.verification:
+            self.verification.close()
         if self.suspects:
             self.suspects.close()
         
