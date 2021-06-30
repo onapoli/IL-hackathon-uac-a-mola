@@ -1,7 +1,7 @@
 #--encoding: utf-8--
 
 from module import Module
-from multiprocessing import Process, Queue, Pipe, Event
+from multiprocessing import Process, Queue, Pipe
 import psutil
 import time
 
@@ -59,7 +59,7 @@ class CustomModule(Module):
                                     except psutil.NoSuchProcess:
                                         continue
                                     proc.suspend()
-                                    self.suspects.put({'name': proc.name(), 'pid': proc.pid()})
+                                    self.suspects.put({'name': proc.name(), 'pid': proc.pid})
             time.sleep(1.0)
 
     def _verifier(self, verification):
